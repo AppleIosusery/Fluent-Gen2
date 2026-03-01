@@ -1,4 +1,4 @@
--- bro please let me out of the basement
+-- no you're staying in the basement
 
 local Root = script.Parent.Parent
 local Flipper = require(Root.Packages.Flipper)
@@ -67,6 +67,34 @@ return function(Config)
 		BackgroundTransparency = 1,
 		Position = UDim2.new(1, -20, 1, -20),
 	})
+
+	-- Edge resize handles (for mobile)
+	local LeftResizeHandle = New("ImageButton", {
+		Size = UDim2.fromOffset(20, 0),
+		Position = UDim2.new(0, -10, 0, 0),
+		BackgroundTransparency = 1,
+		Image = "rbxassetid://109697704628633",
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Rect.new(5,5,15,15),
+		Visible = Library.Utilities:GetOS() == "Mobile",
+	}) :: ImageButton
+
+	local RightResizeHandle = New("ImageButton", {
+		Size = UDim2.fromOffset(20, 0),
+		Position = UDim2.new(1, -10, 0, 0),
+		BackgroundTransparency = 1,
+		Image = "rbxassetid://78509085870539",
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Rect.new(5,5,15,15),
+		Visible = Library.Utilities:GetOS() == "Mobile",
+	}) :: ImageButton
+
+	local BottomResizeHandle = New("ImageButton", {
+		Size = UDim2.new(1, 0, 0, 20),
+		Position = UDim2.new(0, 0, 1, -10),
+		BackgroundTransparency = 1,
+		Visible = Library.Utilities:GetOS() == "Mobile",
+	}) :: ImageButton
 
 	Window.TabHolder = New("ScrollingFrame", {
 		Size = UDim2.fromScale(1, 1),
@@ -138,16 +166,18 @@ return function(Config)
 		Window.ContainerCanvas,
 		TabFrame,
 		ResizeStartFrame,
+		LeftResizeHandle,
+		RightResizeHandle,
+		BottomResizeHandle,
 	})
 
-	-- ==================== SMOOTH LOADING ANIMATION (POP-UP) ====================
+	-- SMOOTH LOADING ANIMATION (POP-UP)
 	local UIScale = New("UIScale", {
 		Parent = Window.Root,
-		Scale = 0.8  -- Start slightly smaller
+		Scale = 0.8
 	})
-
 	task.spawn(function()
-		task.wait(0.05)  -- Tiny delay to let the GUI render
+		task.wait(0.05)
 		local tween = game:GetService("TweenService"):Create(
 			UIScale,
 			TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
@@ -155,18 +185,27 @@ return function(Config)
 		)
 		tween:Play()
 	end)
-	-- ============================================================================
 
-	Window.HideButton = New("ImageButton", {
-		Visible = Library.Utilities:GetOS() == "Mobile",
-		Size = Config.Mobile.Size,
-		BackgroundTransparency = 1,
-		Position = UDim2.new(1, -Config.Mobile.Size.X.Offset - 25, 0.5, -Config.Mobile.Size.Y.Offset / 2),
-		Parent = Config.Parent,
-		Image = Config.Mobile.GetIcon(false).Image,
-		ImageRectOffset = Config.Mobile.GetIcon(false).ImageRectOffset,
-		ImageRectSize = Config.Mobile.GetIcon(false).ImageRectSize
-	})
+	-- Mobile hide button (with safety)
+	if Library.Utilities:GetOS() == "Mobile" and Config.Mobile then
+		local defaultIcon = Config.Mobile.GetIcon and Config.Mobile.GetIcon(false) or {
+			Image = "",
+			ImageRectOffset = Vector2.new(0,0),
+			ImageRectSize = Vector2.new(16,16)
+		}
+		Window.HideButton = New("ImageButton", {
+			Visible = true,
+			Size = Config.Mobile.Size or UDim2.fromOffset(50, 50),
+			BackgroundTransparency = 1,
+			Position = UDim2.new(1, -Config.Mobile.Size.X.Offset - 25, 0.5, -Config.Mobile.Size.Y.Offset / 2),
+			Parent = Config.Parent,
+			Image = defaultIcon.Image,
+			ImageRectOffset = defaultIcon.ImageRectOffset,
+			ImageRectSize = defaultIcon.ImageRectSize,
+		})
+	else
+		Window.HideButton = nil
+	end
 
 	Window.TitleBar = require(script.Parent.TitleBar)({
 		Title = Config.Title,
@@ -179,6 +218,35 @@ return function(Config)
 		Window.AcrylicPaint.AddParent(Window.Root)
 	end
 
+	-- Resize handle dragging logic
+	local function startResize(handle, edge)
+		handle.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+				Resizing = true
+				ResizePos = input.Position
+				local conn
+				conn = input.Changed:Connect(function()
+					if input.UserInputState == Enum.UserInputState.End then
+						Resizing = false
+						if conn then conn:Disconnect() end
+					end
+				end)
+			end
+		end)
+	end
+
+	startResize(LeftResizeHandle, "left")
+	startResize(RightResizeHandle, "right")
+	startResize(BottomResizeHandle, "bottom")
+	-- Also make the existing ResizeStartFrame work
+	Creator.AddSignal(ResizeStartFrame.InputBegan, function(Input)
+		if Input.UserInputType == Enum.UserInputType.Touch or Input.UserInputType == Enum.UserInputType.MouseButton1 then
+			Resizing = true
+			ResizePos = Input.Position
+		end
+	end)
+
+	-- Size motor and rest of the code (keep everything below as is)
 	local SizeMotor = Flipper.GroupMotor.new({
 		X = Window.Size.X.Offset,
 		Y = Window.Size.Y.Offset,
@@ -258,6 +326,8 @@ return function(Config)
 		Window.PostMaximized:Fire(tick())
 	end
 
+	-- Dragging logic (unchanged) ...
+
 	Creator.AddSignal(Window.TitleBar.Frame.InputBegan, function(Input)
 		if
 			Input.UserInputType == Enum.UserInputType.MouseButton1
@@ -291,16 +361,6 @@ return function(Config)
 		end
 	end)
 
-	Creator.AddSignal(ResizeStartFrame.InputBegan, function(Input)
-		if
-			Input.UserInputType == Enum.UserInputType.MouseButton1
-			or Input.UserInputType == Enum.UserInputType.Touch
-		then
-			Resizing = true
-			ResizePos = Input.Position
-		end
-	end)
-
 	Creator.AddSignal(UserInputService.InputChanged, function(Input)
 		if Input == DragInput and Dragging then
 			local Delta = Input.Position - MousePos
@@ -321,11 +381,11 @@ return function(Config)
 		then
 			local Delta = Input.Position - ResizePos
 			local StartSize = Window.Size
-
 			local TargetSize = Vector3.new(StartSize.X.Offset, StartSize.Y.Offset, 0) + Vector3.new(1, 1, 0) * Delta
-			local TargetSizeClamped =
-				Vector2.new(math.clamp(TargetSize.X, Window.MinSize.X, 2048), math.clamp(TargetSize.Y, Window.MinSize.Y, 2048))
-
+			local TargetSizeClamped = Vector2.new(
+				math.clamp(TargetSize.X, Window.MinSize.X, 2048),
+				math.clamp(TargetSize.Y, Window.MinSize.Y, 2048)
+			)
 			SizeMotor:setGoal({
 				X = Flipper.Instant.new(TargetSizeClamped.X),
 				Y = Flipper.Instant.new(TargetSizeClamped.Y),
@@ -354,21 +414,24 @@ return function(Config)
 
 		if not MinimizeNotif then
 			local Key = Library.MinimizeKeybind and Library.MinimizeKeybind.Value or typeof(Library.MinimizeKey) == "string" and Library.MinimizeKey or Library.MinimizeKey.Name
-
 			MinimizeNotif = true
-			
 			Library:Notify({
 				Title = "Interface",
 				Content = `Press {Library.Utilities:Prettify(Key)} to toggle the interface.`,
 				Duration = 6
 			})
 		end
-		if Library.Utilities:GetOS() == "Mobile" then
-			local Icon = Config.Mobile.GetIcon(Window.Minimized)
-			Window.HideButton.Image = Icon.Image
-			Window.HideButton.ImageRectOffset = Icon.ImageRectOffset
-			Window.HideButton.ImageRectSize = Icon.ImageRectSiz
+
+		-- Update mobile hide button icon (with safety)
+		if Library.Utilities:GetOS() == "Mobile" and Window.HideButton and Config.Mobile and Config.Mobile.GetIcon then
+			local success, icon = pcall(Config.Mobile.GetIcon, Config.Mobile.GetIcon, Window.Minimized)
+			if success and icon then
+				Window.HideButton.Image = icon.Image or Window.HideButton.Image
+				Window.HideButton.ImageRectOffset = icon.ImageRectOffset or Vector2.new(0,0)
+				Window.HideButton.ImageRectSize = icon.ImageRectSize or Vector2.new(16,16)
+			end
 		end
+
 		Window.PostMinimized:Fire(tick(), Window.Root.Visible)
 	end
 
@@ -386,53 +449,49 @@ return function(Config)
 		end
 	end)
 
-	Creator.AddSignal(Window.HideButton.InputBegan, function(Input)
-		if
-			Input.UserInputType == Enum.UserInputType.MouseButton1
-			or Input.UserInputType == Enum.UserInputType.Touch
-		then
-			IsDraggingHideButton = true
-			DragStart = Input.Position
-			DragStartPos = Window.HideButton.Position
+	-- Hide button dragging (unchanged) ...
+	if Window.HideButton then
+		Creator.AddSignal(Window.HideButton.InputBegan, function(Input)
+			if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+				IsDraggingHideButton = true
+				DragStart = Input.Position
+				DragStartPos = Window.HideButton.Position
+				Input.Changed:Connect(function()
+					if Input.UserInputState == Enum.UserInputState.End then
+						IsDraggingHideButton = false
+					end
+				end)
+			end
+		end)
 
-			Input.Changed:Connect(function()
-				if Input.UserInputState == Enum.UserInputState.End then
-					IsDraggingHideButton = false
-				end
+		Creator.AddSignal(Window.HideButton.InputChanged, function(Input)
+			if Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch then
+				DragInputHideButton = Input
+			end
+		end)
+
+		Creator.AddSignal(UserInputService.InputChanged, function(Input)
+			if Input == DragInputHideButton and IsDraggingHideButton then
+				local delta = Input.Position - DragStart
+				Window.HideButton.Position = UDim2.new(DragStartPos.X.Scale, DragStartPos.X.Offset + delta.X, DragStartPos.Y.Scale, DragStartPos.Y.Offset + delta.Y)
+			end
+		end)
+
+		if Library.Utilities:GetOS() == "Mobile" then
+			Creator.AddSignal(Window.HideButton.TouchTap, function()
+				Window.Minimized = not Window.Minimized
+				Window.Root.Visible = not Window.Minimized
+				local Icon = Config.Mobile.GetIcon(Window.Minimized)
+				Window.HideButton.Image = Icon.Image
+				Window.HideButton.ImageRectOffset = Icon.ImageRectOffset
+				Window.HideButton.ImageRectSize = Icon.ImageRectSize
+			end)
+		else
+			Creator.AddSignal(Window.HideButton.MouseButton1Click, function()
+				Window.Minimized = not Window.Minimized
+				Window.Root.Visible = not Window.Minimized
 			end)
 		end
-	end)
-
-	Creator.AddSignal(Window.HideButton.InputChanged, function(Input)
-		if
-			Input.UserInputType == Enum.UserInputType.MouseMovement
-			or Input.UserInputType == Enum.UserInputType.Touch
-		then
-			DragInputHideButton = Input
-		end
-	end)
-
-	Creator.AddSignal(UserInputService.InputChanged, function(Input)
-		if Input == DragInputHideButton and IsDraggingHideButton then
-		        local delta = Input.Position - DragStart
-			Window.HideButton.Position = UDim2.new(DragStartPos.X.Scale, DragStartPos.X.Offset + delta.X, DragStartPos.Y.Scale, DragStartPos.Y.Offset + delta.Y)
-		end
-	end)
-
-	if Library.Utilities:GetOS() == "Mobile" then
-		Creator.AddSignal(Window.HideButton.TouchTap, function()
-			Window.Minimized = not Window.Minimized
-       			Window.Root.Visible = not Window.Minimized
-			local Icon = Config.Mobile.GetIcon(Window.Minimized)
-			Window.HideButton.Image = Icon.Image
-			Window.HideButton.ImageRectOffset = Icon.ImageRectOffset
-			Window.HideButton.ImageRectSize = Icon.ImageRectSize
-		end)
-	else
-		Creator.AddSignal(Window.HideButton.MouseButton1Click, function()
-			Window.Minimized = not Window.Minimized
-       			Window.Root.Visible = not Window.Minimized
-		end)	
 	end
 
 	function Window:Destroy()
