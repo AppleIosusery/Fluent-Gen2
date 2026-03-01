@@ -331,6 +331,35 @@ function Library:SetTheme(Name: string)
 
 		-- Load new theme
 		local theme = require(Root.Themes)[Name]
+        function Library:SetTheme(Name: string)
+    if Library.CreatedWindow and table.find(Library.Themes, Name) then
+        -- Call OnDeselect on previous theme if it exists
+        if currentThemeModule and currentThemeModule.OnDeselect then
+            currentThemeModule:OnDeselect()
+        end
+
+        -- Load new theme
+        local theme = require(Root.Themes)[Name]
+        print("Loading theme:", Name, theme)   -- <-- ADD THIS
+        if not theme then
+            warn("Theme not found or failed to load!")
+            return
+        end
+        currentThemeModule = theme
+        Library.Theme = Name
+
+        -- Apply theme to UI
+        Creator.UpdateTheme()
+        Library.ThemeChanged:Fire(Name)
+
+        -- Call OnSelect on new theme if it exists
+        if theme.OnSelect then
+            theme:OnSelect()
+        end
+    end
+end
+         
+
 		currentThemeModule = theme
 		Library.Theme = Name
 
