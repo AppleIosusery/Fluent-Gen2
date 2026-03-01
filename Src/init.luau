@@ -321,26 +321,39 @@ function Library:CreateWindow(Config)
 	return Library:Window(Config)
 end
 
--- Updated SetTheme with OnSelect/OnDeselect support
-function Library:SetTheme(Name: string)
-	if Library.CreatedWindow and table.find(Library.Themes, Name) then
-		-- Call OnDeselect on previous theme if it exists
-		if currentThemeModule and currentThemeModule.OnDeselect then
-			currentThemeModule:OnDeselect()
-		end
-
-		function Library:SetTheme(Name: string)
-    if Library.CreatedWindow and table.find(Library.Themes, Name) then
-        -- Call OnDeselect on previous theme if it exists
-        if currentThemeModule and currentThemeModule.OnDeselect then
-            currentThemeModule:OnDeselect()
-        end
+-- 
         function Library:SetTheme(Name: string)
     if Library.CreatedWindow and table.find(Library.Themes, Name) then
         -- Call OnDeselect on previous theme if it exists
         if currentThemeModule and currentThemeModule.OnDeselect then
             currentThemeModule:OnDeselect()
         end
+
+        -- Load new theme
+        local themesTable = require(Root.Themes)
+        print("Themes table keys:", table.concat(themesTable.Names or {}, ", "))
+        local theme = themesTable[Name]
+        print("Loading theme:", Name, theme and "table" or "nil")
+        if not theme then
+            warn("Theme not found or failed to load!")
+            return
+        end
+        currentThemeModule = theme
+        Library.Theme = Name
+
+        -- Apply theme to UI
+        Creator.UpdateTheme()
+        Library.ThemeChanged:Fire(Name)
+
+        -- Call OnSelect on new theme if it exists
+        if theme.OnSelect then
+            theme:OnSelect()
+        end
+    end
+end
+
+
+
 
         -- Load new theme
         local themesTable = require(Root.Themes)
