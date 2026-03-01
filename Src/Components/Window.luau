@@ -1,4 +1,4 @@
--- a wise man once said: "i will rewrite this someday"
+-- bro please let me out of the basement
 
 local Root = script.Parent.Parent
 local Flipper = require(Root.Packages.Flipper)
@@ -139,6 +139,23 @@ return function(Config)
 		TabFrame,
 		ResizeStartFrame,
 	})
+
+	-- ==================== SMOOTH LOADING ANIMATION (POP-UP) ====================
+	local UIScale = New("UIScale", {
+		Parent = Window.Root,
+		Scale = 0.8  -- Start slightly smaller
+	})
+
+	task.spawn(function()
+		task.wait(0.05)  -- Tiny delay to let the GUI render
+		local tween = game:GetService("TweenService"):Create(
+			UIScale,
+			TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+			{ Scale = 1 }
+		)
+		tween:Play()
+	end)
+	-- ============================================================================
 
 	Window.HideButton = New("ImageButton", {
 		Visible = Library.Utilities:GetOS() == "Mobile",
