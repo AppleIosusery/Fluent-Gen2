@@ -17,6 +17,8 @@ function Element:New(Idx, Config)
 		Value = Config.Default or Config.Value or false,
 		Callback = Config.Callback or function(Value) end,
 		Type = "Toggle",
+		Disabled = Config.Disabled or false,          -- New: disabled state
+		ShowText = Config.ShowText or false,         -- New: show ON/OFF text
 	}
 
 	local ToggleFrame = require(Components.Element)(Config.Title, Config.Description, self.Container, true)
@@ -43,6 +45,25 @@ function Element:New(Idx, Config)
 		},
 	})
 
+	-- Optional ON/OFF text label
+	local ToggleText = nil
+	if Toggle.ShowText then
+		ToggleText = New("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			Size = UDim2.fromOffset(30, 14),
+			Text = Toggle.Value and "ON" or "OFF",
+			TextColor3 = Color3.fromRGB(255,255,255),
+			TextSize = 10,
+			Font = Enum.Font.GothamBold,
+			BackgroundTransparency = 1,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextYAlignment = Enum.TextYAlignment.Center,
+			Visible = Toggle.ShowText,
+			ZIndex = 5,
+		}) :: TextLabel
+	end
+
 	local ToggleSlider = New("Frame", {
 		Size = UDim2.fromOffset(36, 18),
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -58,7 +79,63 @@ function Element:New(Idx, Config)
 		}),
 		ToggleBorder,
 		ToggleCircle,
+		ToggleText, -- nil if not used
 	}) :: Frame
+
+	-- Store any ongoing tween for cleanup
+	local currentBackgroundTween = nil
+
+	local function updateVisuals()
+		if Toggle.Disabled then
+			-- Cancel any running tween
+			if currentBackgroundTween then
+				currentBackgroundTween:Cancel()
+				currentBackgroundTween = nil
+			end
+
+			-- Set disabled appearance directly (no animation)
+			Creator.OverrideTag(ToggleBorder, { Color = "ToggleSlider" })
+			Creator.OverrideTag(ToggleCircle, { ImageColor3 = "ToggleSlider" })
+			ToggleSlider.BackgroundTransparency = 0.7
+			ToggleCircle.ImageTransparency = 0.7
+			if ToggleText then
+				ToggleText.TextTransparency = 0.7
+			end
+
+			-- Move circle to the correct position without animation
+			ToggleCircle.Position = UDim2.new(0, Toggle.Value and 19 or 2, 0.5, 0)
+		else
+			-- Animate background transparency using TweenService
+			local targetTransparency = Toggle.Value and 0 or 1
+			if ToggleSlider.BackgroundTransparency ~= targetTransparency then
+				currentBackgroundTween = TweenService:Create(
+					ToggleSlider,
+					TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+					{ BackgroundTransparency = targetTransparency }
+				)
+				currentBackgroundTween:Play()
+			end
+
+			-- Animate circle position
+			ToggleCircle:TweenPosition(
+				UDim2.new(0, Toggle.Value and 19 or 2, 0.5, 0),
+				Enum.EasingDirection.Out,
+				Enum.EasingStyle.Quint,
+				.25,
+				true
+			)
+
+			-- Update colors and text
+			Creator.OverrideTag(ToggleBorder, { Color = Toggle.Value and "Accent" or "ToggleSlider" })
+			Creator.OverrideTag(ToggleCircle, { ImageColor3 = Toggle.Value and "ToggleToggled" or "ToggleSlider" })
+			ToggleCircle.ImageTransparency = Toggle.Value and 0 or 0.5
+
+			if ToggleText then
+				ToggleText.TextTransparency = 0
+				ToggleText.Text = Toggle.Value and "ON" or "OFF"
+			end
+		end
+	end
 
 	function Toggle:OnChanged(Func)
 		Toggle.Changed = Func
@@ -66,28 +143,12 @@ function Element:New(Idx, Config)
 	end
 
 	function Toggle:SetValue(Value)
-		Value = not not Value
+		if Toggle.Disabled then return end -- Ignore if disabled
 
+		Value = not not Value
 		rawset(Toggle, "Value", Value)
 
-		Creator.OverrideTag(ToggleBorder, { Color = Toggle.Value and "Accent" or "ToggleSlider" })
-		Creator.OverrideTag(ToggleCircle, { ImageColor3 = Toggle.Value and "ToggleToggled" or "ToggleSlider" })
-
-		ToggleCircle:TweenPosition(
-			UDim2.new(0, Toggle.Value and 19 or 2, 0.5, 0),
-			Enum.EasingDirection.Out,
-			Enum.EasingStyle.Quint,
-			.25,
-			true
-		)
-
-		TweenService:Create(
-			ToggleSlider,
-			TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-			{ BackgroundTransparency = Toggle.Value and 0 or 1 }
-		):Play()
-
-		ToggleCircle.ImageTransparency = Toggle.Value and 0 or 0.5
+		updateVisuals()
 
 		if typeof(Toggle.Callback) == "function" then
 			Library:SafeCallback(Toggle.Callback, Toggle.Value)
@@ -97,15 +158,30 @@ function Element:New(Idx, Config)
 		end
 	end
 
+	function Toggle:SetDisabled(Disabled)
+		Toggle.Disabled = Disabled
+		updateVisuals()
+	end
+
 	function Toggle:Destroy()
+		if currentBackgroundTween then
+			currentBackgroundTween:Cancel()
+		end
 		ToggleFrame:Destroy()
 		Library.Options[Idx] = nil
 	end
 
+	-- Click handler (only if not disabled)
 	Creator.AddSignal(ToggleFrame.Frame.MouseButton1Click, function()
-		Toggle:SetValue(not Toggle.Value)
+		if not Toggle.Disabled then
+			Toggle:SetValue(not Toggle.Value)
+		end
 	end)
 
+	-- Initial update
+	updateVisuals()
+
+	-- Keybind code (unchanged, except for respecting disabled state in DoClick)
 	Toggle.Keybind = setmetatable({}, { -- TODO: Rewrite this piece of shit
 		__call = function(_, self, Idx, Config)
 			local Keybind = {
@@ -227,7 +303,9 @@ function Element:New(Idx, Config)
 			end
 		
 			function Keybind:DoClick()
-				Toggle:SetValue(not Toggle.Value)
+				if not Toggle.Disabled then  -- Respect disabled state
+					Toggle:SetValue(not Toggle.Value)
+				end
 				
 				if typeof(self.Callback) == "function" then
 					Library:SafeCallback(self.Callback, self.Value)
@@ -333,6 +411,8 @@ function Element:New(Idx, Config)
 		__newindex =  function(self, index, newvalue)
 			if index == "Value" then
 				task.spawn(Toggle.SetValue, Toggle, newvalue)
+			elseif index == "Disabled" then
+				task.spawn(Toggle.SetDisabled, Toggle, newvalue)
 			end
 			rawset(self, index, newvalue)
 		end
