@@ -58,7 +58,8 @@ local Themes = {
 		"Viow Light",
 		"Viow Mars",
 		"Viow Neon",
-		"Topaz", 
+		"Topaz",
+        "Rainbow"
 		"Emerald",
 		"Ruby",
 		"Sapphire",
