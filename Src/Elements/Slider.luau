@@ -24,6 +24,7 @@ function Element:New(Idx, Config)
 	}
 
 	local Dragging = false
+	local DragInputObject = nil
 
 	local SliderFrame = require(Components.Element)(Config.Title or "Slider", Config.Description, self.Container, false)
 	SliderFrame.DescLabel.Size = UDim2.new(1, -170, 0, 14)
@@ -31,9 +32,10 @@ function Element:New(Idx, Config)
 	Slider.SetTitle = SliderFrame.SetTitle
 	Slider.SetDesc = SliderFrame.SetDesc
 
+	-- Visual dot (centered)
 	local SliderDot = New("ImageLabel", {
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, -7, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0, 0, 0.5, 0),
 		Size = UDim2.fromOffset(14, 14),
 		Image = "http://www.roblox.com/asset/?id=12266946128",
 		ThemeTag = {
@@ -41,6 +43,7 @@ function Element:New(Idx, Config)
 		}
 	})
 
+	-- Rail container for dot
 	local SliderRail = New("Frame", {
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(7, 0),
@@ -49,6 +52,7 @@ function Element:New(Idx, Config)
 		SliderDot,
 	})
 
+	-- Filled part
 	local SliderFill = New("Frame", {
 		Size = UDim2.new(0, 0, 1, 0),
 		ThemeTag = {
@@ -60,6 +64,7 @@ function Element:New(Idx, Config)
 		})
 	})
 
+	-- Value display
 	local SliderDisplay = New("TextBox", {
 		FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json"),
 		Text = "Value",
@@ -77,6 +82,7 @@ function Element:New(Idx, Config)
 		}
 	})
 
+	-- Main slider background
 	local SliderInner = New("Frame", {
 		Size = UDim2.new(1, 0, 0, 4),
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -98,23 +104,57 @@ function Element:New(Idx, Config)
 		SliderRail
 	})
 
-	Creator.AddSignal(SliderDot.InputBegan, function(Input)
-		if
-			Input.UserInputType == Enum.UserInputType.MouseButton1
-			or Input.UserInputType == Enum.UserInputType.Touch
-		then
-			Dragging = true
-		end
-	end)
+	-- Large invisible hit area for easy grabbing
+	local HitArea = New("Frame", {
+		Size = UDim2.new(1, 0, 0, 30),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundTransparency = 1,
+		Parent = SliderInner,
+		Visible = true,
+	})
 
-	Creator.AddSignal(SliderDot.InputEnded, function(Input)
-		if
-			Input.UserInputType == Enum.UserInputType.MouseButton1
-			or Input.UserInputType == Enum.UserInputType.Touch
-		then
-			Dragging = false
+	-- Start dragging
+	local function onInputBegan(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			Dragging = true
+			DragInputObject = input
+			-- Immediately set value based on touch position
+			local fraction = math.clamp((input.Position.X - SliderRail.AbsolutePosition.X) / SliderRail.AbsoluteSize.X, 0, 1)
+			Slider:SetValue(Slider.Min + ((Slider.Max - Slider.Min) * fraction))
 		end
-	end)
+	end
+
+	HitArea.InputBegan:Connect(onInputBegan)
+	SliderRail.InputBegan:Connect(onInputBegan) -- also allow starting on rail
+
+	-- Update while dragging
+	local function onInputChanged(input)
+		if Dragging and (input == DragInputObject or input.UserInputType == DragInputObject.UserInputType) then
+			local fraction = math.clamp((input.Position.X - SliderRail.AbsolutePosition.X) / SliderRail.AbsoluteSize.X, 0, 1)
+			Slider:SetValue(Slider.Min + ((Slider.Max - Slider.Min) * fraction))
+		end
+	end
+
+	UserInputService.InputChanged:Connect(onInputChanged)
+
+	-- End dragging
+	local function onInputEnded(input)
+		if Dragging and (input == DragInputObject or input.UserInputType == DragInputObject.UserInputType) then
+			Dragging = false
+			DragInputObject = nil
+		end
+	end
+
+	UserInputService.InputEnded:Connect(onInputEnded)
+
+	-- Store connections for cleanup
+	Slider.Connections = {
+		HitArea.InputBegan:Connect(onInputBegan),
+		SliderRail.InputBegan:Connect(onInputBegan),
+		UserInputService.InputChanged:Connect(onInputChanged),
+		UserInputService.InputEnded:Connect(onInputEnded),
+	}
 
 	function Slider:OnChanged(Func)
 		Slider.Changed = Func
@@ -126,8 +166,9 @@ function Element:New(Idx, Config)
 
 		rawset(self, "Value", Library.Utilities:Round(math.clamp(Value, Slider.Min, Slider.Max), Slider.Rounding))
 
-		SliderDot.Position = UDim2.new((self.Value - Slider.Min) / (Slider.Max - Slider.Min), -7, 0.5, 0)
-		SliderFill.Size = UDim2.fromScale((self.Value - Slider.Min) / (Slider.Max - Slider.Min), 1)
+		local fraction = (self.Value - Slider.Min) / (Slider.Max - Slider.Min)
+		SliderDot.Position = UDim2.new(fraction, 0, 0.5, 0) -- dot stays centered
+		SliderFill.Size = UDim2.fromScale(fraction, 1)
 		SliderDisplay.Text = tostring(self.Value)
 
 		if typeof(Slider.Callback) == "function" then
@@ -138,20 +179,6 @@ function Element:New(Idx, Config)
 		end
 	end
 
-	Creator.AddSignal(UserInputService.InputChanged, function(Input)
-		if
-			Dragging
-			and (
-				Input.UserInputType == Enum.UserInputType.MouseMovement
-				or Input.UserInputType == Enum.UserInputType.Touch
-			)
-		then
-			local SizeScale =
-				math.clamp((Input.Position.X - SliderRail.AbsolutePosition.X) / SliderRail.AbsoluteSize.X, 0, 1)
-			Slider:SetValue(Slider.Min + ((Slider.Max - Slider.Min) * SizeScale))
-		end
-	end)
-
 	Creator.AddSignal(SliderDisplay.FocusLost, function()
 		Slider:SetValue(tonumber(SliderDisplay.Text) or Slider.Value)
 	end)
@@ -159,6 +186,9 @@ function Element:New(Idx, Config)
 	function Slider:Destroy()
 		SliderFrame:Destroy()
 		Library.Options[Idx] = nil
+		for _, conn in ipairs(Slider.Connections) do
+			conn:Disconnect()
+		end
 	end
 
 	Slider:SetValue(typeof(Config.Default) == "number" and Config.Default or Slider.Min)
@@ -168,7 +198,7 @@ function Element:New(Idx, Config)
 	Slider.Instance = SliderFrame
 
 	return setmetatable(Slider, {
-		__newindex =  function(self, index, newvalue)
+		__newindex = function(self, index, newvalue)
 			if index == "Value" then
 				task.spawn(Slider.SetValue, Slider, newvalue)
 			end
