@@ -58,7 +58,7 @@ local Themes = {
 		"Viow Light",
 		"Viow Mars",
 		"Viow Neon",
-		-- === Fluent Gen2 Themes ===
+		"Topaz", 
 		"Emerald",
 		"Ruby",
 		"Sapphire",
