@@ -429,6 +429,31 @@ function Element:New(Idx, Config)
 				SetSelTransparency(Selected and 0 or 1)
 			end
 
+			-- ==================== SEARCH HIGHLIGHTING ====================
+			-- Enable rich text on the label so we can use <b> tags
+			ButtonLabel.RichText = true
+
+			-- Compute the display text with optional highlighting
+			local originalText = Dropdown.Displayer(Value)
+			if Dropdown.Searchable and SearchBox.Text ~= "" then
+				local searchText = SearchBox.Text
+				local lowerOriginal = originalText:lower()
+				local lowerSearch = searchText:lower()
+				local startPos, endPos = lowerOriginal:find(lowerSearch, 1, true)
+				if startPos then
+					-- Wrap the matching part in <b> tags
+					local highlighted = originalText:sub(1, startPos-1) 
+										.. "<b>" .. originalText:sub(startPos, endPos) .. "</b>" 
+										.. originalText:sub(endPos+1)
+					ButtonLabel.Text = highlighted
+				else
+					ButtonLabel.Text = originalText
+				end
+			else
+				ButtonLabel.Text = originalText
+			end
+			-- =============================================================
+
 			ButtonLabel.InputBegan:Connect(function(Input)
 				if
 					Input.UserInputType == Enum.UserInputType.MouseButton1
@@ -463,7 +488,6 @@ function Element:New(Idx, Config)
 				end
 			end)
 
-			ButtonLabel.Text = Dropdown.Displayer(Value)
 			Button.Parent = DropdownScrollFrame
 
 			Table:UpdateButton()
