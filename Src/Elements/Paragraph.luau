@@ -14,6 +14,7 @@ function Element:New(Idx, Config)
 		Value = Config.Content,
 		Callback = Config.Callback or function(Value: string) end,
 		Type = "Paragraph",
+		Copyable = Config.Copyable ~= false, -- default true
 	}
 
 	local ParagraphFrame = require(Components.Element)(Config.Title, Paragraph.Value, self.Container, false, {
@@ -24,6 +25,63 @@ function Element:New(Idx, Config)
 	ParagraphFrame.Frame.BackgroundTransparency = 0.92
 	ParagraphFrame.Border.Transparency = 0.6
 
+	-- Copy button (only if Copyable)
+	local CopyButton = nil
+	if Paragraph.Copyable then
+		CopyButton = New("ImageButton", {
+			Size = UDim2.fromOffset(20, 20),
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -8, 0, 8),
+			Image = "rbxassetid://10723462360", -- clipboard icon (use a better one if available)
+			BackgroundTransparency = 1,
+			Visible = false, -- initially hidden
+			Parent = ParagraphFrame.Frame,
+			ThemeTag = {
+				ImageColor3 = "SubText",
+			},
+		}) :: ImageButton
+
+		-- Show on hover
+		Creator.AddSignal(ParagraphFrame.Frame.MouseEnter, function()
+			CopyButton.Visible = true
+		end)
+		Creator.AddSignal(ParagraphFrame.Frame.MouseLeave, function()
+			CopyButton.Visible = false
+		end)
+
+		-- Copy functionality
+		Creator.AddSignal(CopyButton.MouseButton1Click, function()
+			local content = Paragraph.Value
+			local success, err = pcall(function()
+				if setclipboard then
+					setclipboard(content)
+				elseif Clipboard and Clipboard.set then
+					Clipboard.set(content)
+				else
+					-- fallback: try to use a TextBox hack (less reliable)
+					local tb = Instance.new("TextBox")
+					tb.Parent = Library.GUI
+					tb.Text = content
+					tb:CaptureFocus()
+					tb:ReleaseFocus(nil)
+					tb:Destroy()
+				end
+			end)
+			if not success then
+				Library:Notify({
+					Title = "Copy Failed",
+					Content = "Could not copy to clipboard.",
+					Duration = 3,
+				})
+			else
+				Library:Notify({
+					Title = "Copied!",
+					Content = "Paragraph content copied.",
+					Duration = 2,
+				})
+			end
+		end)
+	end
 
 	function Paragraph:OnChanged(Func)
 		Paragraph.Changed = Func
