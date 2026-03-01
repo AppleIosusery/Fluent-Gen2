@@ -20,9 +20,12 @@ function Element:New(Idx, Config)
 		Type = "Keybind",
 		Callback = Config.Callback or function(Value) end,
 		ChangedCallback = Config.ChangedCallback or function(New) end,
+		AllowGamepad = Config.AllowGamepad ~= false,   -- default true
+		AllowUnbind = Config.AllowUnbind ~= false,     -- default true
 	}
 
 	local Picking = false
+	local pickingCancelled = false
 
 	local KeybindFrame = require(Components.Element)(Config.Title or "Keybind", Config.Description, self.Container, true)
 
@@ -46,7 +49,31 @@ function Element:New(Idx, Config)
 		},
 	})
 
-	local KeybindDisplayFrame = New("TextButton", {
+	-- Clear button (X) – only shown when AllowUnbind is true and not picking
+	local ClearButton = nil
+	if Keybind.AllowUnbind then
+		ClearButton = New("TextButton", {
+			Size = UDim2.fromOffset(16, 16),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -4, 0.5, 0),
+			BackgroundTransparency = 1,
+			Text = "",
+			Visible = false,  -- initially hidden
+		}, {
+			New("ImageLabel", {
+				Size = UDim2.fromOffset(12, 12),
+				Position = UDim2.fromScale(0.5, 0.5),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Image = "rbxassetid://10723462360", -- a simple X icon
+				BackgroundTransparency = 1,
+				ThemeTag = {
+					ImageColor3 = "SubText",
+				},
+			}),
+		}) :: TextButton
+	end
+
+	local KeybindDisplayFrame: TextButton = New("TextButton", {
 		Size = UDim2.fromOffset(0, 30),
 		Position = UDim2.new(1, -10, 0.5, 0),
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -72,7 +99,21 @@ function Element:New(Idx, Config)
 			},
 		}),
 		KeybindDisplayLabel,
-	}) :: TextButton
+	})
+
+	if ClearButton then
+		ClearButton.Parent = KeybindDisplayFrame
+	end
+
+	-- Helper to update the display text and clear button visibility
+	local function updateDisplay()
+		local displayText = Library.Utilities:Prettify(Keybind.Value)
+		KeybindDisplayLabel.Text = displayText
+
+		if ClearButton then
+			ClearButton.Visible = Keybind.AllowUnbind and not Picking and Keybind.Value ~= "None" and Keybind.Value ~= Enum.KeyCode.Unknown
+		end
+	end
 
 	function Keybind:GetState()
 		if UserInputService:GetFocusedTextBox() and Keybind.Mode ~= "Always" then
@@ -90,12 +131,14 @@ function Element:New(Idx, Config)
 
 			if Key == "LeftMousebutton" or Key == "RightMousebutton" then
 				return Key == "LeftMousebutton" and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
-					or Key == "RightMousebutton"
-						and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
-			else
-				return UserInputService:IsKeyDown(Enum.KeyCode[Keybind.Value])
+					or Key == "RightMousebutton" and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+			elseif typeof(Key) == "EnumItem" and Key.EnumType == Enum.KeyCode then
+				return UserInputService:IsKeyDown(Key)
+			elseif typeof(Key) == "EnumItem" and Key.EnumType == Enum.UserInputType then
+				-- Gamepad buttons are UserInputType
+				return UserInputService:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, Key)
 			end
-		else
+		else -- Toggle mode
 			return Keybind.Toggled
 		end
 	end
@@ -107,7 +150,7 @@ function Element:New(Idx, Config)
 		rawset(Keybind, "Value", Key)
 		Keybind.Mode = Mode
 
-		KeybindDisplayLabel.Text = Library.Utilities:Prettify(Keybind.Value)
+		updateDisplay()
 
 		if typeof(Keybind.ChangedCallback) == "function" then
 			Library:SafeCallback(Keybind.ChangedCallback, Key)
@@ -115,6 +158,10 @@ function Element:New(Idx, Config)
 		if typeof(Keybind.Changed) == "function" then
 			Library:SafeCallback(Keybind.Changed, Key)
 		end
+	end
+
+	function Keybind:Clear()
+		Keybind:SetValue("None")
 	end
 
 	function Keybind:OnClick(Callback)
@@ -140,47 +187,74 @@ function Element:New(Idx, Config)
 		Library.Options[Idx] = nil
 	end
 
+	-- Clear button click
+	if ClearButton then
+		Creator.AddSignal(ClearButton.MouseButton1Click, function()
+			Keybind:Clear()
+		end)
+	end
+
+	-- Start picking
 	Creator.AddSignal(KeybindDisplayFrame.InputBegan, function(Input)
 		if
 			Input.UserInputType == Enum.UserInputType.MouseButton1
 			or Input.UserInputType == Enum.UserInputType.Touch
 		then
 			Picking = true
+			pickingCancelled = false
 			KeybindDisplayLabel.Text = "..."
+			-- Highlight the border
+			Creator.OverrideTag(KeybindDisplayFrame, { BackgroundColor3 = "InputFocused" })
+			updateDisplay() -- hide clear button
 
-			wait(0.2)
+			-- Wait for any input
+			local connection
+			connection = UserInputService.InputBegan:Connect(function(input)
+				if not Picking then return end
+				local key
 
-			UserInputService.InputBegan:Once(function(Input)
-				local Key
-
-				if Input.UserInputType == Enum.UserInputType.Keyboard then
-					Key = Input.KeyCode.Name
-				elseif Input.UserInputType == Enum.UserInputType.MouseButton1 then
-					Key = "LeftMousebutton"
-				elseif Input.UserInputType == Enum.UserInputType.MouseButton2 then
-					Key = "RightMousebutton"
+				if input.UserInputType == Enum.UserInputType.Keyboard then
+					-- Check for Escape to cancel
+					if input.KeyCode == Enum.KeyCode.Escape then
+						pickingCancelled = true
+						Picking = false
+						connection:Disconnect()
+						updateDisplay()
+						Creator.OverrideTag(KeybindDisplayFrame, { BackgroundColor3 = "Keybind" })
+						return
+					end
+					key = input.KeyCode
+				elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+					key = "LeftMousebutton"
+				elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+					key = "RightMousebutton"
+				elseif Keybind.AllowGamepad and input.UserInputType == Enum.UserInputType.Gamepad1 then
+					-- Gamepad button pressed (EnumItem of type UserInputType)
+					key = input.KeyCode -- actually it's a UserInputType, e.g., Enum.UserInputType.Gamepad1
+					-- We'll store the UserInputType enum itself
+				else
+					return -- ignore other inputs
 				end
 
-				UserInputService.InputEnded:Once(function(Input)
-					if (Input.KeyCode.Name == Key
-						or Key == "LeftMousebutton" and Input.UserInputType == Enum.UserInputType.MouseButton1
-						or Key == "RightMousebutton" and Input.UserInputType == Enum.UserInputType.MouseButton2)
-						and not Library.Unloaded
-					then
-						Picking = false
-
-						Keybind.Value = Key
-
-						KeybindDisplayLabel.Text = Library.Utilities:Prettify(Keybind.Value)
-
-						Library:SafeCallback(Keybind.ChangedCallback, Input.KeyCode or Input.UserInputType)
-						Library:SafeCallback(Keybind.Changed, Input.KeyCode or Input.UserInputType)
+				-- Wait for release before finalizing (to avoid immediate retrigger)
+				local releaseConn
+				releaseConn = UserInputService.InputEnded:Connect(function(endedInput)
+					if endedInput == input then
+						releaseConn:Disconnect()
+						if Picking and not pickingCancelled then
+							Picking = false
+							Keybind:SetValue(key)
+							Creator.OverrideTag(KeybindDisplayFrame, { BackgroundColor3 = "Keybind" })
+						end
 					end
 				end)
 			end)
+
+			-- Also allow cancelling by clicking outside (optional, but we'll keep simple for now)
 		end
 	end)
 
+	-- Toggle mode handling (unchanged)
 	Creator.AddSignal(UserInputService.InputBegan, function(Input)
 		if not Picking and not UserInputService:GetFocusedTextBox() then
 			if Keybind.Mode == "Toggle" then
@@ -195,7 +269,12 @@ function Element:New(Idx, Config)
 						Keybind:DoClick()
 					end
 				elseif Input.UserInputType == Enum.UserInputType.Keyboard then
-					if Input.KeyCode.Name == Key or Input.KeyCode == Key then
+					if Input.KeyCode == Key then
+						Keybind.Toggled = not Keybind.Toggled
+						Keybind:DoClick()
+					end
+				elseif Keybind.AllowGamepad and Input.UserInputType == Enum.UserInputType.Gamepad1 then
+					if Input.KeyCode == Key then
 						Keybind.Toggled = not Keybind.Toggled
 						Keybind:DoClick()
 					end
@@ -204,8 +283,9 @@ function Element:New(Idx, Config)
 		end
 	end)
 
-	Keybind:SetValue(Keybind.Value)
+	-- Hold mode is handled by GetState, not here.
 
+	updateDisplay()
 	Library.Options[Idx] = Keybind
 
 	Keybind.Instance = KeybindFrame
