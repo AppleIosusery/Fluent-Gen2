@@ -41,11 +41,22 @@ function TabModule:New(Title, Icon, Parent)
 		Type = "Tab",
 	}
 
-	Icon = Icon:find("^rbxasset[://|id://]") == nil and Library.Utilities:GetIcon(Icon) or {
-		Image = Icon,
-		ImageRectOffset = Vector2.zero,
-		ImageRectSize = Vector2.zero
-	}
+	if type(Icon) == "string" then
+    Icon = Icon:find("^rbxasset[://|id://]") == nil and Library.Utilities:GetIcon(Icon) or {
+        Image = Icon,
+        ImageRectOffset = Vector2.zero,
+        ImageRectSize = Vector2.zero
+    }
+elseif type(Icon) == "table" then
+    Icon = {
+        Image = Icon.Image,
+        ImageRectOffset = Icon.ImageRectOffset or Vector2.zero,
+        ImageRectSize = Icon.ImageRectSize or Vector2.zero
+    }
+else
+    Icon = { Image = "", ImageRectOffset = Vector2.zero, ImageRectSize = Vector2.zero }
+end
+
 
 	Tab.Frame = New("TextButton", {
 		Size = UDim2.new(1, 0, 0, 34),
