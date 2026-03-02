@@ -228,32 +228,35 @@ end)
 	end
 
 	-- Resize handle dragging logic
-	local function startResize(handle, edge)
-		handle.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-				Resizing = true
-				ResizePos = input.Position
-				local conn
-				conn = input.Changed:Connect(function()
-					if input.UserInputState == Enum.UserInputState.End then
-						Resizing = false
-						if conn then conn:Disconnect() end
-					end
-				end)
-			end
-		end)
-	end
+local ResizingEdge = nil
+local StartPosResize = nil
 
-	startResize(LeftResizeHandle, "left")
-	startResize(RightResizeHandle, "right")
-	startResize(BottomResizeHandle, "bottom")
-	-- Also make the existing ResizeStartFrame work
-	Creator.AddSignal(ResizeStartFrame.InputBegan, function(Input)
-		if Input.UserInputType == Enum.UserInputType.Touch or Input.UserInputType == Enum.UserInputType.MouseButton1 then
+local function startResize(handle, edge)
+	handle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 			Resizing = true
-			ResizePos = Input.Position
+			ResizingEdge = edge
+			ResizePos = input.Position
+			StartPosResize = Window.Root.Position  -- store starting position for left edge adjustment
+			local conn
+			conn = input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					Resizing = false
+					ResizingEdge = nil
+					if conn then conn:Disconnect() end
+				end
+			end)
 		end
 	end)
+end
+
+startResize(LeftResizeHandle, "left")
+startResize(RightResizeHandle, "right")
+startResize(BottomResizeHandle, "bottom")
+-- Also make the existing ResizeStartFrame work as a corner handle
+startResize(ResizeStartFrame, "corner")
+
+
 
 	-- Size motor and rest of the code (keep everything below as is)
 	local SizeMotor = Flipper.GroupMotor.new({
@@ -370,37 +373,51 @@ end)
 		end
 	end)
 
-	Creator.AddSignal(UserInputService.InputChanged, function(Input)
-		if Input == DragInput and Dragging then
-			local Delta = Input.Position - MousePos
-			Window.Position = UDim2.fromOffset(StartPos.X.Offset + Delta.X, StartPos.Y.Offset + Delta.Y)
+Creator.AddSignal(UserInputService.InputChanged, function(Input)
+	if Input == DragInput and Dragging then
+		local Delta = Input.Position - MousePos
+		Window.Position = UDim2.fromOffset(StartPos.X.Offset + Delta.X, StartPos.Y.Offset + Delta.Y)
+		PosMotor:setGoal({
+			X = Instant(Window.Position.X.Offset),
+			Y = Instant(Window.Position.Y.Offset),
+		})
+
+		if Window.Maximized then
+			Window.Maximize(false, true, true)
+		end
+	end
+
+	if (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) and Resizing then
+		local Delta = Input.Position - ResizePos
+		local StartSize = Window.Size
+		local newWidth = StartSize.X.Offset
+		local newHeight = StartSize.Y.Offset
+
+		-- Determine which edge is being dragged
+		if ResizingEdge == "left" then
+			newWidth = math.clamp(StartSize.X.Offset - Delta.X, Window.MinSize.X, 2048)
+			-- For left edge, also move the window position to keep the right edge anchored
+			Window.Position = UDim2.fromOffset(StartPosResize.X.Offset + Delta.X, StartPosResize.Y.Offset)
 			PosMotor:setGoal({
 				X = Instant(Window.Position.X.Offset),
 				Y = Instant(Window.Position.Y.Offset),
 			})
-
-			if Window.Maximized then
-				Window.Maximize(false, true, true)
-			end
+		elseif ResizingEdge == "right" then
+			newWidth = math.clamp(StartSize.X.Offset + Delta.X, Window.MinSize.X, 2048)
+		elseif ResizingEdge == "bottom" then
+			newHeight = math.clamp(StartSize.Y.Offset + Delta.Y, Window.MinSize.Y, 2048)
+		elseif ResizingEdge == "corner" then
+			newWidth = math.clamp(StartSize.X.Offset + Delta.X, Window.MinSize.X, 2048)
+			newHeight = math.clamp(StartSize.Y.Offset + Delta.Y, Window.MinSize.Y, 2048)
 		end
 
-		if
-			(Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch)
-			and Resizing
-		then
-			local Delta = Input.Position - ResizePos
-			local StartSize = Window.Size
-			local TargetSize = Vector3.new(StartSize.X.Offset, StartSize.Y.Offset, 0) + Vector3.new(1, 1, 0) * Delta
-			local TargetSizeClamped = Vector2.new(
-				math.clamp(TargetSize.X, Window.MinSize.X, 2048),
-				math.clamp(TargetSize.Y, Window.MinSize.Y, 2048)
-			)
-			SizeMotor:setGoal({
-				X = Flipper.Instant.new(TargetSizeClamped.X),
-				Y = Flipper.Instant.new(TargetSizeClamped.Y),
-			})
-		end
-	end)
+		SizeMotor:setGoal({
+			X = Flipper.Instant.new(newWidth),
+			Y = Flipper.Instant.new(newHeight),
+		})
+	end
+end)
+
 
 	Creator.AddSignal(UserInputService.InputEnded, function(Input)
 		if Resizing == true or Input.UserInputType == Enum.UserInputType.Touch then
