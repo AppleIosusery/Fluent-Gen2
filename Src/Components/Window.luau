@@ -179,19 +179,8 @@ task.spawn(function()
     TweenService:Create(Window.Root, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
         Position = UDim2.fromOffset(Window.Position.X.Offset, Window.Position.Y.Offset),
         BackgroundTransparency = 0
-    }):Play()
-end)
+    }):
 
-
-	task.spawn(function()
-		task.wait(0.05)
-		local tween = game:GetService("TweenService"):Create(
-			UIScale,
-			TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-			{ Scale = 1 }
-		)
-		tween:Play()
-	end)
 
 	-- Mobile hide button (with safety)
 	if Library.Utilities:GetOS() == "Mobile" and Config.Mobile then
