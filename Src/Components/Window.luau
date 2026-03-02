@@ -179,9 +179,9 @@ task.spawn(function()
     TweenService:Create(Window.Root, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
         Position = UDim2.fromOffset(Window.Position.X.Offset, Window.Position.Y.Offset),
         BackgroundTransparency = 0
-    }):
-}):Play()
+    }):Play()
 end)
+
 
 	-- Mobile hide button (with safety)
 	if Library.Utilities:GetOS() == "Mobile" and Config.Mobile then
