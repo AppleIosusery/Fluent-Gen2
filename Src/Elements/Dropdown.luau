@@ -88,7 +88,7 @@ function Element:New(Idx, Config)
 		}
 	}, {
 		New("UICorner", {
-			CornerRadius = UDim.new(0, 5),
+			CornerRadius = UDim.new(0, 10),
 		}),
 		New("UIStroke", {
 			Transparency = 0.5,
