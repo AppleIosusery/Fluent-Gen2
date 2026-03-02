@@ -68,33 +68,45 @@ return function(Config)
 		Position = UDim2.new(1, -20, 1, -20),
 	})
 
-	-- Edge resize handles (for mobile)
-	local LeftResizeHandle = New("ImageButton", {
-		Size = UDim2.fromOffset(20, 0),
-		Position = UDim2.new(0, -10, 0, 0),
-		BackgroundTransparency = 1,
-		Image = "rbxassetid://109697704628633",
-		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = Rect.new(5,5,15,15),
-		Visible = Library.Utilities:GetOS() == "Mobile",
-	}) :: ImageButton
+	
 
-	local RightResizeHandle = New("ImageButton", {
-		Size = UDim2.fromOffset(20, 0),
-		Position = UDim2.new(1, -10, 0, 0),
-		BackgroundTransparency = 1,
-		Image = "rbxassetid://78509085870539",
-		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = Rect.new(5,5,15,15),
-		Visible = Library.Utilities:GetOS() == "Mobile",
-	}) :: ImageButton
+local handleColor = Library.Themes[Library.Theme].Text or Color3.fromRGB(200,200,200)
 
-	local BottomResizeHandle = New("ImageButton", {
-		Size = UDim2.new(1, 0, 0, 20),
-		Position = UDim2.new(0, 0, 1, -10),
-		BackgroundTransparency = 1,
-		Visible = Library.Utilities:GetOS() == "Mobile",
-	}) :: ImageButton
+LeftResizeHandle = New("ImageButton", {
+	Size = UDim2.fromOffset(20, 0),
+	Position = UDim2.new(0, -10, 0, 0),
+	BackgroundTransparency = 0.8,  -- slightly visible background for easier tapping
+	BackgroundColor3 = Color3.fromRGB(0,0,0),
+	Image = "rbxassetid://109697704628633",
+	ImageTransparency = 0.3,        -- make the icon visible but subtle
+	ImageColor3 = handleColor,
+	ScaleType = Enum.ScaleType.Slice,
+	SliceCenter = Rect.new(5,5,15,15),
+	Visible = Library.Utilities:GetOS() == "Mobile",
+}) :: ImageButton
+
+RightResizeHandle = New("ImageButton", {
+	Size = UDim2.fromOffset(20, 0),
+	Position = UDim2.new(1, -10, 0, 0),
+	BackgroundTransparency = 0.8,
+	BackgroundColor3 = Color3.fromRGB(0,0,0),
+	Image = "rbxassetid://78509085870539",
+	ImageTransparency = 0.3,
+	ImageColor3 = handleColor,
+	ScaleType = Enum.ScaleType.Slice,
+	SliceCenter = Rect.new(5,5,15,15),
+	Visible = Library.Utilities:GetOS() == "Mobile",
+}) :: ImageButton
+
+BottomResizeHandle = New("ImageButton", {
+	Size = UDim2.new(1, 0, 0, 20),
+	Position = UDim2.new(0, 0, 1, -10),
+	BackgroundTransparency = 0.8,
+	BackgroundColor3 = Color3.fromRGB(0,0,0),
+	Image = "",  -- no image for bottom, just a transparent bar
+	ImageTransparency = 1,
+	Visible = Library.Utilities:GetOS() == "Mobile",
+}) :: ImageButton
 
 	Window.TabHolder = New("ScrollingFrame", {
 		Size = UDim2.fromScale(1, 1),
