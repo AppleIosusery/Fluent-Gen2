@@ -180,7 +180,8 @@ task.spawn(function()
         Position = UDim2.fromOffset(Window.Position.X.Offset, Window.Position.Y.Offset),
         BackgroundTransparency = 0
     }):
-
+}):Play()
+end)
 
 	-- Mobile hide button (with safety)
 	if Library.Utilities:GetOS() == "Mobile" and Config.Mobile then
