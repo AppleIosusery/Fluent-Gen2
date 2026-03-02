@@ -1,19 +1,22 @@
 local Root = script.Parent.Parent
-
 local Flipper = require(Root.Packages.Flipper)
 local Creator = require(Root.Modules.Creator)
 local Acrylic = require(Root.Modules.Acrylic)
+local TweenService = game:GetService("TweenService")
 
 local Spring = Flipper.Spring.new
 local Instant = Flipper.Instant.new
 local New = Creator.New
 
-local SoundService = game:GetService("SoundService")
-
-local Notification = {}
+local Notification = {
+	Queue = {},
+	Active = 0,
+	MaxVisible = 5,
+	Holder = nil,
+}
 
 function Notification:Init(GUI)
-	Notification.Holder = New("Frame", {
+	self.Holder = New("Frame", {
 		Position = UDim2.new(1, -30, 1, -30),
 		Size = UDim2.new(0, 310, 1, -30),
 		AnchorPoint = Vector2.new(1, 1),
@@ -30,191 +33,216 @@ function Notification:Init(GUI)
 end
 
 function Notification:New(Config)
-	local NewNotification = {
-		Closed = false,
-	}
+	local self = {}
+	self.Config = Config or {}
+	self.Config.Title = self.Config.Title or "Title"
+	self.Config.Content = self.Config.Content or "Content"
+	self.Config.SubContent = self.Config.SubContent or ""
+	self.Config.Duration = self.Config.Duration or 5
+	self.Config.Icon = self.Config.Icon or nil
+	self.Config.Buttons = self.Config.Buttons or {}
+	self.Config.Sound = self.Config.Sound or nil
 
-	Config.Title = Config.Title or "Title"
-	Config.Content = Config.Content or "Content"
-	Config.SubContent = Config.SubContent or ""
-	Config.Duration = Config.Duration or nil
-	Config.Buttons = Config.Buttons or {}
-	Config.Sound = Config.Sound or {}
+	-- Create the notification GUI
+	self.AcrylicPaint = Acrylic.AcrylicPaint()
+	self.AcrylicPaint.Frame.Size = UDim2.fromScale(1, 1)
+	self.AcrylicPaint.Frame.BackgroundTransparency = 0.2
 
-	Config.Sound.Parent = SoundService
-	Config.Sound.PlayOnRemove = true
-
-	NewNotification.AcrylicPaint = Acrylic.AcrylicPaint()
-
-	NewNotification.Title = New("TextLabel", {
-		Position = UDim2.new(0, 14, 0, 17),
-		Text = Config.Title,
-		RichText = true,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		TextTransparency = 0,
-		FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json"),
-		TextSize = 13,
-		TextXAlignment = "Left",
-		TextYAlignment = "Center",
-		Size = UDim2.new(1, -12, 0, 12),
-		TextWrapped = true,
-		BackgroundTransparency = 1,
-		ThemeTag = {
-			TextColor3 = "Text",
-		},
-	})
-
-	NewNotification.ContentLabel = New("TextLabel", {
-		FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json"),
-		Text = Config.Content,
-		TextColor3 = Color3.fromRGB(240, 240, 240),
-		TextSize = 14,
+	-- Title
+	self.Title = New("TextLabel", {
+		Position = UDim2.new(0, 14, 0, 12),
+		Text = self.Config.Title,
+		FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold),
+		TextSize = 15,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Size = UDim2.new(1, 0, 0, 14),
+		TextColor3 = Color3.fromRGB(255,255,255),
+		Size = UDim2.new(1, -50, 0, 20),
 		BackgroundTransparency = 1,
-		TextWrapped = true,
-		ThemeTag = {
-			TextColor3 = "Text",
-		},
 	})
 
-	NewNotification.SubContentLabel = New("TextLabel", {
-		FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json"),
-		Text = Config.SubContent,
-		TextColor3 = Color3.fromRGB(240, 240, 240),
-		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Size = UDim2.new(1, 0, 0, 14),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		BackgroundTransparency = 1,
-		TextWrapped = true,
-		ThemeTag = {
-			TextColor3 = "SubText",
-		},
-	})
-
-	NewNotification.LabelHolder = New("Frame", {
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(14, 40),
-		Size = UDim2.new(1, -28, 0, 0),
-	}, {
-		New("UIListLayout", {
-			SortOrder = Enum.SortOrder.LayoutOrder,
-			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, 3),
-		}),
-		NewNotification.ContentLabel,
-		NewNotification.SubContentLabel,
-	})
-
-	NewNotification.CloseButton = New("TextButton", {
-		Text = "",
-		Position = UDim2.new(1, -14, 0, 13),
+	-- Close button
+	self.CloseButton = New("TextButton", {
 		Size = UDim2.fromOffset(20, 20),
-		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -30, 0, 12),
 		BackgroundTransparency = 1,
+		Text = "",
 	}, {
 		New("ImageLabel", {
-			Image = require(script.Parent.Assets).Close,
 			Size = UDim2.fromOffset(16, 16),
 			Position = UDim2.fromScale(0.5, 0.5),
 			AnchorPoint = Vector2.new(0.5, 0.5),
+			Image = "rbxassetid://9886659671",
 			BackgroundTransparency = 1,
-			ThemeTag = {
-				ImageColor3 = "Text",
-			},
+			ThemeTag = { ImageColor3 = "Text" },
 		}),
 	})
 
-	NewNotification.Root = New("Frame", {
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 1, 0),
-		Position = UDim2.fromScale(1, 0),
-	}, {
-		NewNotification.AcrylicPaint.Frame,
-		NewNotification.Title,
-		NewNotification.CloseButton,
-		NewNotification.LabelHolder,
-	})
-
-	if Config.Content == "" then
-		NewNotification.ContentLabel.Visible = false
-	end
-
-	if Config.SubContent == "" then
-		NewNotification.SubContentLabel.Visible = false
-	end
-
-	NewNotification.Holder = New("Frame", {
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 200),
-		Parent = Notification.Holder,
-	}, {
-		NewNotification.Root,
-	})
-
-	local RootMotor = Flipper.GroupMotor.new({
-		Scale = 1,
-		Offset = 60,
-	})
-
-	RootMotor:onStep(function(Values)
-		NewNotification.Root.Position = UDim2.new(Values.Scale, Values.Offset, 0, 0)
-	end)
-
-	Creator.AddSignal(NewNotification.CloseButton.MouseButton1Click, function()
-		NewNotification:Close()
-	end)
-
-	function NewNotification:Open()
-		local ContentSize = NewNotification.LabelHolder.AbsoluteSize.Y
-		NewNotification.Holder.Size = UDim2.new(1, 0, 0, 58 + ContentSize)
-
-		if Config.Sound.SoundId then
-			NewNotification.Sound = New("Sound", Config.Sound)
-
-			if not NewNotification.Sound.IsLoaded then
-				NewNotification.Sound.Loaded:Wait()
-			end
-
-			NewNotification.Sound:Destroy()
-			NewNotification.Sound = nil
-		end
-
-		RootMotor:setGoal({
-			Scale = Spring(0, { frequency = 5 }),
-			Offset = Spring(0, { frequency = 5 }),
+	-- Optional icon
+	self.Icon = nil
+	if self.Config.Icon then
+		self.Icon = New("ImageLabel", {
+			Size = UDim2.fromOffset(24, 24),
+			Position = UDim2.new(0, 14, 0, 12),
+			Image = self.Config.Icon,
+			BackgroundTransparency = 1,
 		})
 	end
 
-	function NewNotification:Close()
-		if not NewNotification.Closed then
-			NewNotification.Closed = true
-			task.spawn(function()
-				RootMotor:setGoal({
-					Scale = Spring(1, { frequency = 5 }),
-					Offset = Spring(60, { frequency = 5 }),
-				})
-				task.wait(0.4)
-				if require(Root).UseAcrylic then
-					NewNotification.AcrylicPaint.Model:Destroy()
-				end
-				NewNotification.Holder:Destroy()
-			end)
+	-- Main content
+	self.Content = New("TextLabel", {
+		Position = UDim2.new(0, 14, 0, 38),
+		Text = self.Config.Content,
+		FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json"),
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Color3.fromRGB(240,240,240),
+		Size = UDim2.new(1, -28, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+	})
+
+	-- Sub‑content (optional)
+	self.SubContent = nil
+	if self.Config.SubContent and self.Config.SubContent ~= "" then
+		self.SubContent = New("TextLabel", {
+			Position = UDim2.new(0, 14, 0, 38 + self.Content.AbsoluteSize.Y + 4),
+			Text = self.Config.SubContent,
+			FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json"),
+			TextSize = 12,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = Color3.fromRGB(200,200,200),
+			Size = UDim2.new(1, -28, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+		})
+	end
+
+	-- Button holder
+	self.ButtonHolder = nil
+	if #self.Config.Buttons > 0 then
+		self.ButtonHolder = New("Frame", {
+			Position = UDim2.new(0, 14, 0, 38 + (self.Content.AbsoluteSize.Y + 4) * (self.SubContent and 2 or 1)),
+			Size = UDim2.new(1, -28, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+		}, {
+			New("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Right,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				Padding = UDim.new(0, 8),
+			}),
+		})
+
+		for _, btnConfig in ipairs(self.Config.Buttons) do
+			local btn = self:CreateButton(btnConfig.Title, btnConfig.Callback)
+			btn.Parent = self.ButtonHolder
 		end
 	end
 
-	NewNotification:Open()
-	if Config.Duration then
-		task.delay(Config.Duration, function()
-			NewNotification:Close()
+	-- Build the main frame
+	self.Frame = New("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Parent = Notification.Holder,
+		LayoutOrder = -Notification.Active, -- so newest appears at bottom
+	}, {
+		self.AcrylicPaint.Frame,
+		self.Title,
+		self.CloseButton,
+		self.Content,
+		self.SubContent,
+		self.ButtonHolder,
+		self.Icon,
+	})
+
+	-- Apply corner rounding
+	local UICorner = Instance.new("UICorner")
+	UICorner.CornerRadius = UDim.new(0, 8)
+	UICorner.Parent = self.Frame
+
+	-- Play sound if provided
+	if self.Config.Sound and self.Config.Sound.SoundId then
+		local sound = Instance.new("Sound")
+		sound.SoundId = self.Config.Sound.SoundId
+		sound.Parent = self.Frame
+		sound:Play()
+		task.delay(2, sound.Destroy, sound)
+	end
+
+	-- Animation: slide + fade in
+	self.Frame.Position = UDim2.new(1, 50, 0, 0)
+	self.Frame.BackgroundTransparency = 1
+	TweenService:Create(self.Frame, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+		Position = UDim2.new(1, -10, 0, 0),
+		BackgroundTransparency = 0,
+	}):Play()
+
+	-- Close button click
+	self.CloseButton.MouseButton1Click:Connect(function()
+		self:Close()
+	end)
+
+	-- Auto‑close after duration
+	if self.Config.Duration > 0 then
+		task.delay(self.Config.Duration, function()
+			if self.Frame and self.Frame.Parent then
+				self:Close()
+			end
 		end)
 	end
-	return NewNotification
+
+	-- Store in queue
+	Notification.Active = Notification.Active + 1
+	table.insert(Notification.Queue, self)
+
+	return self
+end
+
+function Notification:CreateButton(text, callback)
+	local btn = New("TextButton", {
+		Size = UDim2.fromOffset(60, 28),
+		Text = text,
+		FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json"),
+		TextSize = 13,
+		TextColor3 = Color3.fromRGB(255,255,255),
+		BackgroundColor3 = Color3.fromRGB(60,60,60),
+		AutoButtonColor = false,
+	}, {
+		New("UICorner", { CornerRadius = UDim.new(0, 4) }),
+	})
+	btn.MouseButton1Click:Connect(function()
+		if callback then callback() end
+		self:Close()
+	end)
+	return btn
+end
+
+function Notification:Close()
+	if not self.Frame then return end
+
+	-- Animate out
+	TweenService:Create(self.Frame, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+		Position = UDim2.new(1, 50, 0, 0),
+		BackgroundTransparency = 1,
+	}):Play()
+
+	task.delay(0.3, function()
+		if self.AcrylicPaint then
+			self.AcrylicPaint.Model:Destroy()
+		end
+		self.Frame:Destroy()
+
+		Notification.Active = Notification.Active - 1
+		-- Remove from queue
+		for i, n in ipairs(Notification.Queue) do
+			if n == self then
+				table.remove(Notification.Queue, i)
+				break
+			end
+		end
+	end)
 end
 
 return Notification
