@@ -171,11 +171,18 @@ return function(Config)
 		BottomResizeHandle,
 	})
 
-	-- SMOOTH LOADING ANIMATION (POP-UP)
-	local UIScale = New("UIScale", {
-		Parent = Window.Root,
-		Scale = 0.8
-	})
+Window.Root.Position = UDim2.new(0, Window.Position.X.Offset, 0, Window.Position.Y.Offset + 50)
+Window.Root.BackgroundTransparency = 1
+
+task.spawn(function()
+    task.wait(0.05)
+    TweenService:Create(Window.Root, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        Position = UDim2.fromOffset(Window.Position.X.Offset, Window.Position.Y.Offset),
+        BackgroundTransparency = 0
+    }):Play()
+end)
+
+
 	task.spawn(function()
 		task.wait(0.05)
 		local tween = game:GetService("TweenService"):Create(
