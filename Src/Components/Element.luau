@@ -81,7 +81,7 @@ return function(Title, Desc, Parent, Hover, Config)
 		},
 	}, {
 		New("UICorner", {
-			CornerRadius = UDim.new(0, 4),
+			CornerRadius = UDim.new(0, 8),
 		}),
 		Element.Border,
 		Element.LabelHolder,
