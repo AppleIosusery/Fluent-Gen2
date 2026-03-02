@@ -27,7 +27,7 @@ return function(Config)
 			},
 		}, {
 			New("UICorner", {
-				CornerRadius = UDim.new(0, 7),
+				CornerRadius = UDim.new(0, 10),
 			}),
 			New("ImageLabel", {
 				Image = Icon,
